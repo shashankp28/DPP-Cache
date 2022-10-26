@@ -8,7 +8,7 @@ def constrained_solve(theta, C, nu, X_t_1, delta_t, Q_t, V, files):
     
     def objective(X):
         cache_hit = np.dot(theta, X)
-        change = np.linalg.norm(X-X_t_1, ord=1)
+        change = np.linalg.norm(X-X_t_1, ord=1)/2
         queue_term = Q_t*(change - nu)*delta_t
         return queue_term - V*cache_hit
 

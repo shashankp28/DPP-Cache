@@ -95,7 +95,7 @@ for i in tqdm(range(NumSeq)):
         delta_t = get_delta()
         X_t, obj = constrained_solve(pred, cache_constraint, cost_contraint, X_t_1, delta_t, Q, V, threshold)
         objective.append(obj)
-        Delta = delta_t*np.linalg.norm(X_t-X_t_1, ord=1)
+        Delta = delta_t*np.linalg.norm(X_t-X_t_1, ord=1)/2
         fetching_cost.append(Delta)
         
         X_t_ftpl, obj_ftpl = constrained_solve_ftpl(np.array(prev_demands).sum(axis=0), X_t_1_ftpl, cache_constraint, gamma, threshold, i)

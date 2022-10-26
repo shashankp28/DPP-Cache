@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 def get_delta():
-    return 0.5
+    return 1
 
 
 def get_demands(seq_no, time_limit, data, DataLength, NumSeq, threshold):
