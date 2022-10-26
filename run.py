@@ -4,21 +4,30 @@ import random
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-from algorithms.driver2 import run_algorithms
 from loader.load_data import *
+from dotenv import load_dotenv
+import matplotlib.pyplot as plt
 from optimizers.constrained import *
 from optimizers.network import *
+from algorithms.driver2 import run_algorithms
 
+load_dotenv()
 
-time_limit = float('inf')
-alpha = 0.1
-threshold = 423
-NumSeq = 200
-run_others = False
-path_to_input = "Datasets/311_dataset.txt"
+Q = int(os.getenv("Q_INIT"))
+past = int(os.getenv("PAST"))
+V_0 = int(os.getenv("V_0"))
+future = int(os.getenv("FUTURE"))
+alpha = float(os.getenv("ALPHA"))
+NumSeq = int(os.getenv("NUM_SEQ"))
+threshold = int(os.getenv("THRESHOLD"))
+train_memory = int(os.getenv("TRAIN_MEMORY"))
+use_saved = os.getenv("USE_SAVED")=="True"
+run_others = os.getenv("RUN_OTHERS")=="True"
+cost_constraint = int(os.getenv("COST_CONSTRAINT"))
+time_limit = float('inf') if os.getenv("TIME_LIMIT")=='inf' else int(os.getenv("TIME_LIMIT"))
+path_to_input = os.getenv("PATH_TO_INPUT")
 
-
+cache_constraint = int(alpha*threshold)
 
 path = f"./experiments/csv_{NumSeq}/"
 try:
@@ -34,17 +43,6 @@ DataLength = len(data)
 
 
 if run_others: run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha)
-
-
-
-train_memory = 5
-Q = 0
-V_0 = 500
-cache_constraint = int(alpha*threshold)
-cost_contraint = 20
-use_saved = False
-past = 3
-future = 1
 
 gamma = np.random.normal(0, 1, (threshold,))
 
@@ -93,7 +91,7 @@ for i in tqdm(range(NumSeq)):
         np.array(prev_demands).mean(axis=0)
         
         delta_t = get_delta()
-        X_t, obj = constrained_solve(pred, cache_constraint, cost_contraint, X_t_1, delta_t, Q, V, threshold)
+        X_t, obj = constrained_solve(pred, cache_constraint, cost_constraint, X_t_1, delta_t, Q, V, threshold)
         objective.append(obj)
         Delta = delta_t*np.linalg.norm(X_t-X_t_1, ord=1)/2
         fetching_cost.append(Delta)
@@ -116,7 +114,7 @@ for i in tqdm(range(NumSeq)):
         
         
         
-        Q = max(Q + Delta - cost_contraint, 0)
+        Q = max(Q + Delta - cost_constraint, 0)
         queue.append(Q)
     
     hit_rate.append(np.dot(X_t, next_dem)/time)
@@ -169,7 +167,7 @@ plt.show()
 
 plt.plot(ma(fetching_cost))
 plt.title("Fetching Cost vs Timeslot")
-plt.axhline(y=cost_contraint, linewidth=2, label= 'Cost Constraint')
+plt.axhline(y=cost_constraint, linewidth=2, label= 'Cost Constraint')
 plt.xlabel("Timeslot")
 plt.ylabel("Cost")
 plt.legend(loc = 'upper left')
