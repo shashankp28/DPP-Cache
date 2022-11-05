@@ -1,15 +1,33 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import random
+import hashlib
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from shutil import copyfile
 from loader.load_data import *
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
-from optimizers.constrained import *
 from optimizers.network import *
+from optimizers.constrained import *
 from algorithms.driver2 import run_algorithms
+
+import sys
+import hashlib
+
+BUF_SIZE = 65536
+
+sha256 = hashlib.sha256()
+
+def env_hash():
+    with open("./.env", 'rb') as f:
+        while True:
+            data = f.read(BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
+    return sha256.hexdigest()
 
 load_dotenv()
 
@@ -26,6 +44,8 @@ run_others = os.getenv("RUN_OTHERS")=="True"
 cost_constraint = int(os.getenv("COST_CONSTRAINT"))
 time_limit = float('inf') if os.getenv("TIME_LIMIT")=='inf' else int(os.getenv("TIME_LIMIT"))
 path_to_input = os.getenv("PATH_TO_INPUT")
+tag = env_hash()[:10]
+print("Experiment Tag:", tag)
 
 cache_constraint = int(alpha*threshold)
 
@@ -71,7 +91,8 @@ X_t_1_ftpl = np.zeros((threshold,))
 X_t_1_ftpl[init_indices] = 1
 
 for i in tqdm(range(NumSeq)):
-    V = 20
+    V = V_0
+    if os.getenv("USE_ROOT_V")=="True": V *= (i+1)**0.5
     next_dem, time = get_demands(i, time_limit, data, DataLength, NumSeq, threshold)
     X_t = np.zeros((threshold,))
     init_indices = random.sample(range(threshold), cache_constraint)
@@ -128,17 +149,20 @@ for i in tqdm(range(NumSeq)):
     
     prev_demands.append(next_dem)
 
-our_path = "./experiments/"
+our_path = f"./experiments/{tag}/"
+try:
+    os.makedirs(our_path)
+except FileExistsError:
+    pass
+copyfile("./.env", our_path+"/.env")
+
+
 pd.DataFrame(hit_rate).to_csv(our_path+'hit_rate.csv',index=False)
 pd.DataFrame(download_rate).to_csv(our_path+'download_rate.csv',index=False)
 pd.DataFrame(hit_rate_ftpl).to_csv(our_path+'hit_rate_ftpl.csv',index=False)
 pd.DataFrame(download_rate_ftpl).to_csv(our_path+'download_rate_ftpl.csv',index=False)
 
-path = f"./plots/"
-try:
-    os.makedirs(path)
-except FileExistsError:
-    pass
+path = our_path
 
 
 plt.plot(ma(err))
