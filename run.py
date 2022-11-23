@@ -10,8 +10,8 @@ from loader.load_data import *
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from optimizers.network import *
-from optimizers.constrained import *
 from algorithms.driver2 import run_algorithms
+from optimizers.constrained import constrained_solve
 
 import sys
 import hashlib
@@ -55,6 +55,12 @@ try:
 except FileExistsError:
     pass
 
+our_path = f"./experiments/{tag}/"
+try:
+    os.makedirs(our_path)
+except FileExistsError:
+    pass
+copyfile("./.env", our_path+"/.env")
 
 
 data = pd.read_csv(path_to_input, sep = ' ')
@@ -62,7 +68,7 @@ data.columns = ['Timestamp', 'File_ID', "File_Size"]
 DataLength = len(data)
 
 
-if run_others: run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha)
+if run_others: run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha, cache_constraint)
 
 gamma = np.random.normal(0, 1, (threshold,))
 
@@ -79,16 +85,11 @@ hit_rate = []
 download_rate = []
 
 
-hit_rate_ftpl = []
-download_rate_ftpl = []
-
 
 X_t_1 = np.zeros((threshold,))
 init_indices = random.sample(range(threshold), cache_constraint)
 X_t_1[init_indices] = 1
 
-X_t_1_ftpl = np.zeros((threshold,))
-X_t_1_ftpl[init_indices] = 1
 
 for i in tqdm(range(NumSeq)):
     V = V_0
@@ -98,8 +99,7 @@ for i in tqdm(range(NumSeq)):
     init_indices = random.sample(range(threshold), cache_constraint)
     X_t[init_indices] = 1
     
-    X_t_ftpl = np.zeros((threshold,))
-    X_t_ftpl[init_indices] = 1
+    
     if i==past+future:
         model = get_model(prev_demands, past, future, threshold, use_saved)
         print(model.summary())
@@ -116,9 +116,7 @@ for i in tqdm(range(NumSeq)):
         objective.append(obj)
         Delta = delta_t*np.linalg.norm(X_t-X_t_1, ord=1)/2
         fetching_cost.append(Delta)
-        
-        X_t_ftpl, obj_ftpl = constrained_solve_ftpl(np.array(prev_demands).sum(axis=0), X_t_1_ftpl, cache_constraint, gamma, threshold, i)
-        
+            
         
         e = np.linalg.norm(next_dem-pred, ord=2)/len(pred)
         err.append(e)
@@ -132,76 +130,81 @@ for i in tqdm(range(NumSeq)):
         
         best = np.dot(next_dem, final)
         best_maximum.append(best)
-        
-        
-        
+                
         Q = max(Q + Delta - cost_constraint, 0)
         queue.append(Q)
+        
+        plt.plot(ma(cache_hit))
+        plt.title("Cache Hit vs Timeslot")
+        plt.xlabel("Timeslot")
+        plt.ylabel("Cache Hit")
+        plt.savefig(our_path+"Cache_Hit.jpg")
+        plt.clf()
+        
+        plt.plot(ma(err))
+        plt.title("Mean Squared Test Error in Demand Prediction vs Timeslot")
+        plt.xlabel("Timeslot")
+        plt.ylabel("MSE")
+        plt.savefig(our_path+"NN-MSE.jpg")
+        plt.clf()
+
+
+        plt.plot(ma(queue))
+        plt.title("Q vs Timeslot")
+        plt.xlabel("Timeslot")
+        plt.ylabel("Q")
+        plt.savefig(our_path+"Q.jpg")
+        plt.clf()
+
+
+        plt.plot(ma(objective))
+        plt.title("Constrained Objective Function vs Timeslot")
+        plt.xlabel("Timeslot")
+        plt.ylabel("Objective Function")
+        plt.savefig(our_path+"Obj.jpg")
+        plt.clf()
+
+
+        plt.plot(ma(fetching_cost))
+        plt.title("Fetching Cost vs Timeslot")
+        plt.axhline(y=cost_constraint, linewidth=2, label= 'Cost Constraint')
+        plt.xlabel("Timeslot")
+        plt.ylabel("Cost")
+        # plt.legend(loc = 'upper left')
+        plt.savefig(our_path+"Cost.jpg")
+        plt.clf()
+
+
+        plt.plot(ma(cache_hit))
+        plt.title("Cache Hit vs Timeslot")
+        plt.xlabel("Timeslot")
+        plt.ylabel("Cache Hit")
+        plt.savefig(our_path+"Cache_Hit.jpg")
+        plt.clf()
     
-    hit_rate.append(np.dot(X_t, next_dem)/time)
-    download_rate.append(np.sum(np.logical_and(X_t==1, X_t_1==0))/time)
+    hit_rate.append(np.dot(X_t, next_dem)/np.sum(next_dem))
+    download_rate.append(np.sum(np.logical_and(X_t==1, X_t_1==0))/np.sum(next_dem))
     
-    hit_rate_ftpl.append(np.dot(X_t_ftpl, next_dem)/time)
-    download_rate_ftpl.append(np.sum(np.logical_and(X_t_ftpl==1, X_t_1_ftpl==0))/time)
+    plt.plot(ma(hit_rate))
+    plt.title("Cache Hit Rate vs Timeslot")
+    plt.xlabel("Timeslot")
+    plt.ylabel("Cache Hit Rate")
+    plt.savefig(our_path+"Cache_Hit_Rate.jpg")
+    plt.clf()
+    
+    plt.plot(ma(download_rate))
+    plt.title("Download Rate vs Timeslot")
+    plt.xlabel("Timeslot")
+    plt.ylabel("Download Rate")
+    plt.savefig(our_path+"Download_Rate.jpg")
+    plt.clf()
+
         
     X_t_1 = X_t
-    X_t_1_ftpl = X_t_ftpl
+
     
     prev_demands.append(next_dem)
-
-our_path = f"./experiments/{tag}/"
-try:
-    os.makedirs(our_path)
-except FileExistsError:
-    pass
-copyfile("./.env", our_path+"/.env")
 
 
 pd.DataFrame(hit_rate).to_csv(our_path+'hit_rate.csv',index=False)
 pd.DataFrame(download_rate).to_csv(our_path+'download_rate.csv',index=False)
-pd.DataFrame(hit_rate_ftpl).to_csv(our_path+'hit_rate_ftpl.csv',index=False)
-pd.DataFrame(download_rate_ftpl).to_csv(our_path+'download_rate_ftpl.csv',index=False)
-
-path = our_path
-
-
-plt.plot(ma(err))
-plt.title("Mean Squared Test Error in Demand Prediction vs Timeslot")
-plt.xlabel("Timeslot")
-plt.ylabel("MSE")
-plt.savefig(path+"NN-MSE.jpg")
-plt.show()
-
-
-plt.plot(ma(queue))
-plt.title("Q vs Timeslot")
-plt.xlabel("Timeslot")
-plt.ylabel("Q")
-plt.savefig(path+"Q.jpg")
-plt.show()
-
-
-plt.plot(ma(objective))
-plt.title("Constrained Objective Function vs Timeslot")
-plt.xlabel("Timeslot")
-plt.ylabel("Objective Function")
-plt.savefig(path+"Obj.jpg")
-plt.show()
-
-
-plt.plot(ma(fetching_cost))
-plt.title("Fetching Cost vs Timeslot")
-plt.axhline(y=cost_constraint, linewidth=2, label= 'Cost Constraint')
-plt.xlabel("Timeslot")
-plt.ylabel("Cost")
-plt.legend(loc = 'upper left')
-plt.savefig(path+"Cost.jpg")
-plt.show()
-
-
-plt.plot(ma(cache_hit))
-plt.title("Cache Hit vs Timeslot")
-plt.xlabel("Timeslot")
-plt.ylabel("Cache Hit")
-plt.savefig(path+"Cache_Hit.jpg")
-plt.show()

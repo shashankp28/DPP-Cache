@@ -1,14 +1,30 @@
 import math
+import random
 import numpy as np
 import pandas as pd
+from loader.load_data import *
 from algorithms.offline_opt import MIN 
 from algorithms.LFU import Bipartite_LFU
 from algorithms.LRU import Bipartite_LRU
 from algorithms.Lead_cache import Lead_cache
-from algorithms.Generate_network import generate_network_graph
+from optimizers.constrained import constrained_solve_ftpl
 from algorithms.Perturbed_LFU import Perturbed_Bipartite_LFU
+from algorithms.Generate_network import generate_network_graph
 
-def run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha):
+
+def run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha, cache_constraint):
+    
+    
+    hit_rate_ftpl = []
+    download_rate_ftpl = []
+    gamma = np.random.normal(0, 1, (threshold,))
+    prev_demands = [[0 for i in range(threshold)]]
+    X_t_1_ftpl = np.zeros((threshold,))
+    init_indices = random.sample(range(threshold), cache_constraint)
+    X_t_1_ftpl[init_indices] = 1
+    
+        
+    
     users = 1
     caches = 1
     d = 1
@@ -45,6 +61,7 @@ def run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha):
     DataLength = len(data)
     # splitting up the entire time axis into non-overlapping parts
     for i in range(NumSeq):
+        
         df = pd.DataFrame(data[int(i*DataLength/NumSeq) : int((i+1)*DataLength/NumSeq)])
         df.sort_values("Timestamp")
 
@@ -137,6 +154,25 @@ def run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha):
         LeadCache_Downloads_Madow.append(np.sum(download_rates_Madow)/(time*caches))
         print("LC Completed")
         print()
+        
+        
+        next_dem, time = get_demands(i, time_limit, data, DataLength, NumSeq, threshold)
+        
+        X_t_ftpl = np.zeros((threshold,))
+        X_t_ftpl[init_indices] = 1
+        
+        
+        X_t_ftpl, obj_ftpl = constrained_solve_ftpl(np.array(prev_demands).sum(axis=0), X_t_1_ftpl, cache_constraint, gamma, threshold, i)
+        
+        hit_rate_ftpl.append(np.dot(X_t_ftpl, next_dem)/time)
+        download_rate_ftpl.append(np.sum(np.logical_and(X_t_ftpl==1, X_t_1_ftpl==0))/time)
+        
+        X_t_1_ftpl = X_t_ftpl
+        prev_demands.append(next_dem)
+        print("FTPL Completed")
+        print()
+        
+        
 
 
         # #Outputting the result to stdout
@@ -172,5 +208,5 @@ def run_algorithms(path_to_input, path, NumSeq, time_limit, threshold, alpha):
     pd.DataFrame(perturbed_LFU_Hits).to_csv(path+'perturbed_LFU_Hits_Seq.csv',index=False)
     pd.DataFrame(perturbed_LFU_Downloads).to_csv(path+'perturbed_LFU_Downloads_Seq.csv',index=False)
 
-
-
+    pd.DataFrame(hit_rate_ftpl).to_csv(path+'hit_rate_ftpl.csv',index=False)
+    pd.DataFrame(download_rate_ftpl).to_csv(path+'download_rate_ftpl.csv',index=False)
